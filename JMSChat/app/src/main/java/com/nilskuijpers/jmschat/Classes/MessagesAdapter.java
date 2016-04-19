@@ -4,6 +4,7 @@ import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.nilskuijpers.jmschat.R;
@@ -15,11 +16,11 @@ import java.util.List;
  */
 public class MessagesAdapter extends  RecyclerView.Adapter<MessagesAdapter.ViewHolder> {
 
-    private List<String> receivedMessages;
+    private List<ChatMessage> receivedMessages;
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        TextView v = (TextView) LayoutInflater.from(parent.getContext()).inflate(R.layout.message_layout, parent, false);
+        LinearLayout v = (LinearLayout) LayoutInflater.from(parent.getContext()).inflate(R.layout.message_layout, parent, false);
 
         ViewHolder vh = new ViewHolder(v);
 
@@ -28,7 +29,8 @@ public class MessagesAdapter extends  RecyclerView.Adapter<MessagesAdapter.ViewH
 
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
-        holder.mTextView.setText(receivedMessages.get(position));
+        holder.mTextViewMessage.setText(receivedMessages.get(position).getMessageContent());
+        holder.mTextViewSenderAndDate.setText(receivedMessages.get(position).getUserName() + " / " + receivedMessages.get(position).getDateTime().toString());
     }
 
     @Override
@@ -38,16 +40,18 @@ public class MessagesAdapter extends  RecyclerView.Adapter<MessagesAdapter.ViewH
 
     public static class ViewHolder extends RecyclerView.ViewHolder
     {
-        public TextView mTextView;
+        public TextView mTextViewMessage;
+        public TextView mTextViewSenderAndDate;
 
-        public ViewHolder(TextView v)
+        public ViewHolder(LinearLayout v)
         {
             super(v);
-            mTextView = v;
+            mTextViewMessage = (TextView) v.findViewById(R.id.info_text);
+            mTextViewSenderAndDate = (TextView) v.findViewById(R.id.senderAndDate);
         }
     }
 
-    public MessagesAdapter(List<String> receivedMessages)
+    public MessagesAdapter(List<ChatMessage> receivedMessages)
     {
         this.receivedMessages = receivedMessages;
     }

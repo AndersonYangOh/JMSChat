@@ -1,38 +1,32 @@
 package com.nilskuijpers.jmschat;
 
 import android.app.NotificationManager;
-import android.content.Context;
 import android.graphics.BitmapFactory;
 import android.media.RingtoneManager;
 import android.net.Uri;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v4.app.NotificationCompat;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
 
 import com.kaazing.gateway.jms.client.JmsConnectionFactory;
+import com.nilskuijpers.jmschat.Classes.ChatMessage;
+import com.nilskuijpers.jmschat.Classes.ChatsAdapter;
 import com.nilskuijpers.jmschat.Classes.ConnectionExceptionListener;
 import com.nilskuijpers.jmschat.Classes.DispatchQueue;
-import com.nilskuijpers.jmschat.Classes.MessagesAdapter;
 
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 
-import javax.jms.BytesMessage;
 import javax.jms.Connection;
 import javax.jms.Destination;
 import javax.jms.JMSException;
-import javax.jms.MapMessage;
 import javax.jms.Message;
 import javax.jms.MessageConsumer;
 import javax.jms.MessageListener;
@@ -40,66 +34,54 @@ import javax.jms.MessageProducer;
 import javax.jms.Session;
 import javax.jms.TextMessage;
 
-public class MainActivity extends AppCompatActivity implements MessageListener{
+public class ListActivity extends AppCompatActivity implements MessageListener {
 
-    private final static String GLOBAL_BROADCASTSUBSCRIPTION = "/topic/GLOBAL_BROADCAST";
+    private RecyclerView chatRecycler;
+    private RecyclerView.LayoutManager chatsLayoutManager;
+    private ChatsAdapter chatsAdapter;
+    private LinkedHashMap<String, ArrayList<ChatMessage>> messageDb = new LinkedHashMap<>();
 
+    private final static String DEBUG_LOCAL_USER = "nilsk123";
+    private final static String DEBUG_PERSONAL_QUEUE = "/queue/" + DEBUG_LOCAL_USER;
+    private final static String DEBUG_RECIPIENT_QUEUE = "/queue/jackster";
+    private final static String GLOBAL_BROADCASTSUBSCRIPTION = "/topic/GLOBAL_BROADCAST_V2";
+
+    //JMS Communications variables;
     private DispatchQueue dispatchQueue;
     private JmsConnectionFactory connectionFactory;
     private Connection connection;
     private Session session;
     private HashMap<String, ArrayDeque<MessageConsumer>> consumers = new HashMap<String, ArrayDeque<MessageConsumer>>();
+
+    //Variables for notifications
     private NotificationCompat.Builder mBuilder;
     private NotificationManager mNotifyManager;
     private int mNotificationId = 001;
 
-    private List<String> receivedMessages;
-    public  RecyclerView.Adapter messagesAdapter;
-
-    private Button sendMessageButton;
-    private EditText messageText;
-
-    private RecyclerView messagesRecycler;
-
-    private RecyclerView.LayoutManager messagesLayoutManager;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_list);
 
-        receivedMessages = new ArrayList<>();
+        chatRecycler = (RecyclerView) findViewById(R.id.chatRecycler);
+        chatRecycler.setHasFixedSize(true);
+        chatsLayoutManager = new LinearLayoutManager(this);
+        chatRecycler.setLayoutManager(chatsLayoutManager);
+        chatsAdapter = new ChatsAdapter(this.messageDb);
+        chatRecycler.setAdapter(chatsAdapter);
 
-        receivedMessages.add("hoi");
-        receivedMessages.add("nils");
-
+        //Getting a reference to system services
         mNotifyManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
-        messagesRecycler = (RecyclerView) findViewById(R.id.messagesRecycler);
-
-        messagesRecycler.setHasFixedSize(true);
-
-        messagesLayoutManager = new LinearLayoutManager(this);
-
-        messagesRecycler.setLayoutManager(messagesLayoutManager);
-
-        messagesAdapter = new MessagesAdapter(this.receivedMessages);
-
-        messagesRecycler.setAdapter(messagesAdapter);
-
-        /*sendMessageButton = (Button) findViewById(R.id.sendMessageButton);
-        messageText = (EditText) findViewById(R.id.messageText);
-
-        sendMessageButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                sendMessage(messageText.getText().toString());
-            }
-        });*/
-
-        if (connectionFactory == null) {
-            try {
+        //Setup JMS connection and connect to remote server
+        if (connectionFactory == null)
+        {
+            try
+            {
                 connectionFactory = JmsConnectionFactory.createConnectionFactory();
-            } catch (JMSException e) {
+            }
+            catch (JMSException e)
+            {
                 e.printStackTrace();
                 Log.e("ERROR", e.getMessage());
             }
@@ -107,28 +89,32 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
         connect();
     }
 
+    //This function connects to the remote JMS server
     private void connect() {
-        //closedExplicitly = false;
         Log.i("JMS","CONNECTING");
+
         // initialize dispatch queue that will be used to run
         // blocking calls asynchronously on a separate thread
         dispatchQueue = new DispatchQueue("Async Dispatch Queue");
         dispatchQueue.start();
         dispatchQueue.waitUntilReady();
 
-        // Since WebSocket.connect() is a blocking method which will not return until
-        // the connection is established or connection fails, it is a good practice to
-        // establish connection on a separate thread so that UI is not blocked.
         dispatchQueue.dispatchAsync(new Runnable() {
             public void run() {
                 try {
+                    //setup connection
                     connectionFactory.setGatewayLocation(URI.create("ws://192.168.0.101:8001/jms"));
                     connection = connectionFactory.createConnection();
                     connection.start();
+
+                    //create session
                     session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                     Log.i("JMS", "CONNECTED");
                     connection.setExceptionListener(new ConnectionExceptionListener());
-                    subscribeTo(MainActivity.GLOBAL_BROADCASTSUBSCRIPTION);
+
+                    //at this point connection succeeded so subscribe to global broadcast topic
+                    subscribeTo(ListActivity.GLOBAL_BROADCASTSUBSCRIPTION);
+                    subscribeTo(ListActivity.DEBUG_PERSONAL_QUEUE);
                 } catch (Exception e) {
                     Log.e("JMS Connect Exception", e.getMessage());
                     dispatchQueue.quit();
@@ -137,6 +123,7 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
         });
     }
 
+    //This function disconnects from remote JMS server
     private void disconnect() {
         Log.i("JMS","DISCONNECTING");
 
@@ -158,6 +145,7 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
         }).start();
     }
 
+    //This functions subscribes the consumer to a topic or queue
     private void subscribeTo(final String subscription)
     {
         Log.i("JMS", "Subscribing to " + subscription);
@@ -183,11 +171,11 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
                     }
 
                     consumersToDestionation.add(consumer);
-                    consumer.setMessageListener(MainActivity.this);
+                    consumer.setMessageListener(ListActivity.this);
 
-                    if(subscription == MainActivity.GLOBAL_BROADCASTSUBSCRIPTION)
+                    if(subscription == ListActivity.GLOBAL_BROADCASTSUBSCRIPTION)
                     {
-                        //sendMessage("Hello broadcast!");
+                        sendMessage("Hello broadcast!", ListActivity.GLOBAL_BROADCASTSUBSCRIPTION);
                     }
 
                 } catch (JMSException e) {
@@ -196,7 +184,32 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
             }
         });
     }
+    private void sendMessage(final String messageContent, final String groupName)
+    {
+        dispatchQueue.dispatchAsync(new Runnable() {
+            public void run() {
+                try {
+                    MessageProducer producer = session.createProducer(getDestination(groupName));
+                    Message message;
 
+                    message = session.createTextMessage(messageContent);
+                    message.setStringProperty("Sender", "nilsk123");
+                    message.setBooleanProperty("Group", true);
+                    message.setStringProperty("GroupName", groupName);
+
+                    producer.send(message);
+
+                    producer.close();
+                } catch (JMSException e) {
+                    e.printStackTrace();
+                    Log.e("ERROR", e.getMessage());
+                }
+            }
+        });
+    }
+
+
+    //This function determines the subscription type
     private Destination getDestination(String destinationName) throws JMSException {
         Destination destination;
         if (destinationName.startsWith("/topic/")) {
@@ -213,35 +226,14 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
 
     }
 
-    private void sendMessage(final String messageContent)
-    {
-        dispatchQueue.dispatchAsync(new Runnable() {
-            public void run() {
-                try {
-                    MessageProducer producer = session.createProducer(getDestination(MainActivity.GLOBAL_BROADCASTSUBSCRIPTION));
-                    Message message;
-
-                    message = session.createTextMessage(messageContent);
-
-                    producer.send(message);
-
-                    producer.close();
-                } catch (JMSException e) {
-                    e.printStackTrace();
-                    Log.e("ERROR", e.getMessage());
-                }
-            }
-        });
-    }
-
+    //This function gets called whenever the messagelistener receives a new message
     @Override
     public void onMessage(Message message) {
         try {
             if (message instanceof TextMessage) {
-                Log.i("JMS / RECEIVED: ", ((TextMessage)message).getText());
+                Log.i("JMS / RECEIVED Text: ", ((TextMessage)message).getText() + " FROM " + ((TextMessage)message).getStringProperty("Sender"));
 
-
-                mBuilder = new NotificationCompat.Builder(MainActivity.this).setSmallIcon(R.drawable.ic_stat_name).setLargeIcon(BitmapFactory.decodeResource(getResources(),R.drawable.ic_stat_name)).setContentTitle("Broadcast").setContentText(((TextMessage) message).getText().toString());
+                mBuilder = new NotificationCompat.Builder(ListActivity.this).setSmallIcon(R.drawable.ic_stat_name).setLargeIcon(BitmapFactory.decodeResource(getResources(),R.drawable.ic_stat_name)).setContentTitle(((TextMessage)message).getStringProperty("Sender")).setContentText(((TextMessage) message).getText().toString());
 
                 Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
                 mBuilder.setSound(alarmSound);
@@ -250,19 +242,57 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
 
                 mNotificationId = mNotificationId + 1;
 
-                this.receivedMessages.add(((TextMessage) message).getText().toString());
+                if(!message.getBooleanProperty("Group"))
+                {
+                    if(!messageDb.containsKey(message.getStringProperty("Sender")))
+                    {
+                        Log.i("INFO","Create new local chat for " + message.getStringProperty("Sender"));
+                        messageDb.put(message.getStringProperty("Sender"), new ArrayList<ChatMessage>());
+                    }
+
+                    else
+                    {
+                        Log.i("INFO","Local chat found for sender " +  message.getStringProperty("Sender"));
+                    }
+
+                    messageDb.get(message.getStringProperty("Sender")).add(new ChatMessage(message.getStringProperty("Sender"),new Date(), ((TextMessage) message).getText().toString()));
+                }
+
+                else
+                {
+                    Log.i("INFO","Broadcast received");
+                    if(!messageDb.containsKey(message.getStringProperty("Broadcast")))
+                    {
+                        Log.i("INFO","Create new local chat for broadcast");
+                        messageDb.put("Broadcast", new ArrayList<ChatMessage>());
+                    }
+
+                    else
+                    {
+                        Log.i("INFO","Local chat found for broadcast");
+                    }
+
+                    messageDb.get("Broadcast").add(new ChatMessage(message.getStringProperty("Sender"),new Date(), ((TextMessage) message).getText().toString()));
+                }
+
+
+
+
+
+                //receivedMessages = messageDb.get(message.getStringProperty("Sender"));
+
+
 
                 runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-
-                                    messagesAdapter.notifyDataSetChanged();
-
-                                }
-                            });
-                //
+                    @Override
+                    public void run() {
+                        Log.i("INFO", messageDb.size() + " chats");
+                        //messagesAdapter = new MessagesAdapter(receivedMessages);
+                        chatRecycler.swapAdapter(new ChatsAdapter(messageDb),false);
+                    }
+                });
             }
-            else if (message instanceof BytesMessage) {
+            /*else if (message instanceof BytesMessage) {
                 BytesMessage bytesMessage = (BytesMessage)message;
 
                 long len = bytesMessage.getBodyLength();
@@ -300,7 +330,7 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
             }
             else {
                 Log.i("JMS / RECEIVED: ", "UNKNOWN MESSAGE TYPE: "+message.getClass().getSimpleName());
-            }
+            }*/
 
         }
         catch (Exception ex) {
@@ -309,6 +339,7 @@ public class MainActivity extends AppCompatActivity implements MessageListener{
         }
     }
 
+    //Creates a hexdump from a byte array
     private String hexDump(byte[] b) {
         if (b.length == 0) {
             return "empty";
