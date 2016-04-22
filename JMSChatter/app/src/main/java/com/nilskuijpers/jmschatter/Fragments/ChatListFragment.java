@@ -16,11 +16,14 @@ import android.widget.EditText;
 import com.nilskuijpers.jmschatter.Adapters.ChatListAdapter;
 import com.nilskuijpers.jmschatter.MainActivity;
 import com.nilskuijpers.jmschatter.ObjectClasses.ChatConversation;
+import com.nilskuijpers.jmschatter.ObjectClasses.GroupConversation;
 import com.nilskuijpers.jmschatter.ObjectClasses.SingleRecipientConversation;
 import com.nilskuijpers.jmschatter.R;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.jms.JMSException;
 
 
 /**
@@ -42,7 +45,9 @@ public class ChatListFragment extends Fragment {
     private ChatListAdapter chatListAdapter;
     private RecyclerView.LayoutManager chatListLayoutManager;
     private FloatingActionButton newChatFab;
+    private FloatingActionButton newGroupFab;
     private EditText newChatRecipient;
+    private EditText newGroupName;
 
     private List<ChatConversation> conversations;
 
@@ -95,7 +100,10 @@ public class ChatListFragment extends Fragment {
         this.chatListAdapter = new ChatListAdapter(conversations);
         //init ui properties
         this.newChatFab = (FloatingActionButton) v.findViewById(R.id.newChatFab);
+        this.newGroupFab = (FloatingActionButton) v.findViewById(R.id.newGroupChatFab);
         this.newChatRecipient = (EditText) v.findViewById(R.id.recipientText);
+        this.newGroupName = (EditText) v.findViewById(R.id.groupNameText);
+
 
         newChatFab.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -105,18 +113,38 @@ public class ChatListFragment extends Fragment {
 
                     if(newCrp == null)
                     {
-                        conversations.add(new SingleRecipientConversation(activity.getDestination("/queue/" + newChatRecipient.getText().toString()),newChatRecipient.getText().toString()));
+                        newCrp = new SingleRecipientConversation(activity.getDestination("/queue/" + newChatRecipient.getText().toString()),newChatRecipient.getText().toString());
+                        conversations.add(newCrp);
                         chatListUpdated();
                     }
 
-                    else
-                    {
-                        activity.swapListForChat(newCrp);
-                    }
+                    activity.swapListForChat(newCrp);
 
                     //sendMessageTo("Hello world!", getDestination("/queue/" + newChatRecipient.getText().toString()));
                 } catch (Exception e) {
                     Log.e("ERROR", e.getMessage().toString());
+                }
+            }
+        });
+
+        newGroupFab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                GroupConversation newGrp = activity.getGroupConversationByName(newGroupName.getText().toString());
+
+                if(newGrp == null)
+                {
+                    newGrp = new GroupConversation(activity.getDestination("/topic/" + newGroupName.getText().toString()),newGroupName.getText().toString());
+                    activity.subscribeTo("/topic/" + newGrp.getGroupName());
+                    conversations.add(newGrp);
+                    chatListUpdated();
+                }
+
+                }
+                catch (JMSException e)
+                {
+                    e.printStackTrace();
                 }
             }
         });

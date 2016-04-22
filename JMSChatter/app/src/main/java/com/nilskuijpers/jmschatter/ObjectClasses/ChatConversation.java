@@ -13,7 +13,6 @@ public abstract class ChatConversation {
 
     private List<ChatMessage> chatMessages;
     private Date lastInteraction;
-    private String singleAuthor;
     private Destination destinationQueue;
 
 
@@ -63,7 +62,7 @@ public abstract class ChatConversation {
 
         else
         {
-            return "No messages";
+            return "Write a first message to say hello!";
         }
     }
 

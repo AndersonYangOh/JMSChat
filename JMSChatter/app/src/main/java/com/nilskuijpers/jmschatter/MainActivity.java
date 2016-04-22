@@ -2,6 +2,7 @@ package com.nilskuijpers.jmschatter;
 
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -21,6 +22,7 @@ import com.nilskuijpers.jmschatter.ObjectClasses.GroupConversation;
 import com.nilskuijpers.jmschatter.ObjectClasses.SingleRecipientConversation;
 
 import java.net.URI;
+import java.security.acl.Group;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,8 +43,8 @@ import javax.jms.TextMessage;
 public class MainActivity extends AppCompatActivity implements MessageListener, ChatListFragment.OnFragmentInteractionListener, ChatFragment.OnFragmentInteractionListener {
 
     //Static properties
-    public final static String LOCAL_USER = "jack";
-    public final static String PERSONAL_QUEUE = "/queue/" + LOCAL_USER;
+    public static String LOCAL_USER;
+    public static String PERSONAL_QUEUE;
     public final static String GLOBAL_BROADCASTSUBSCRIPTION = "/topic/GLOBAL_BROADCAST_NEW_V2";
 
     private final static String CHATLIST_TAG = "ChatListFragment";
@@ -73,6 +75,12 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Intent intent = getIntent();
+
+        this.LOCAL_USER = intent.getStringExtra("local_user");
+        this.PERSONAL_QUEUE = "/queue/" + this.LOCAL_USER;
+
+        getSupportActionBar().setTitle(LOCAL_USER);
 
         //initialise conversation list
         this.conversations = new ArrayList<>();
@@ -144,7 +152,7 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
     }
 
     //This functions subscribes the consumer to a topic or queue
-    private void subscribeTo(final String subscription)
+    public void subscribeTo(final String subscription)
     {
         Log.i("JMS", "Subscribing to " + subscription);
 
@@ -178,29 +186,6 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
         });
     }
 
-    private void sendBroadcastMessage(final String messageContent)
-    {
-        dispatchQueue.dispatchAsync(new Runnable() {
-            public void run() {
-                try {
-                    MessageProducer producer = session.createProducer(getDestination(MainActivity.GLOBAL_BROADCASTSUBSCRIPTION));
-                    Message message;
-
-                    message = session.createTextMessage(messageContent);
-                    message.setStringProperty("author", "Broadcast");
-                    message.setBooleanProperty("group", false);
-
-                    producer.send(message);
-
-                    producer.close();
-                } catch (JMSException e) {
-                    e.printStackTrace();
-                    Log.e("ERROR", e.getMessage());
-                }
-            }
-        });
-    }
-
     public void sendMessageTo(final String messageContent, final Destination destination)
     {
 
@@ -211,8 +196,21 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
                     MessageProducer producer = session.createProducer(destination);
                     Message message = session.createTextMessage(messageContent);
 
+
+
                     message.setStringProperty("author", MainActivity.LOCAL_USER);
-                    message.setBooleanProperty("group", false);
+
+                    if(destination.toString().contains("/topic/"))
+                    {
+                        GroupConversation grp = (GroupConversation) activeConversation;
+                        message.setBooleanProperty("group", true);
+                        message.setStringProperty("groupName", grp.getGroupName());
+                    }
+
+                    else
+                    {
+                        message.setBooleanProperty("group", false);
+                    }
 
 
                     producer.send(message);
@@ -237,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
             destination = session.createQueue(destinationName);
         }
         else {
-            Log.e("JMS", "Invalid destionation: " + destinationName);
+            Log.e("JMS", "Invalid destination: " + destinationName);
             return null;
         }
         return destination;
@@ -254,28 +252,37 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
                 if(textMessage.getBooleanProperty("group"))
                 {
                     //its a group message
-                    for(int i = 0; i < this.conversations.size(); i++) {
-                        if (this.conversations.get(i) instanceof GroupConversation) {
-                            GroupConversation grp = (GroupConversation) this.conversations.get(i);
+                    Log.i("Info", "It's a group message....");
 
-                            if(grp.getGroupName() == textMessage.getStringProperty("groupname"))
-                            {
-                                //Group convo found
-                                Log.i("Info", "Group conversation found in datastore");
-                                ChatMessage cm = new ChatMessage(textMessage.getStringProperty("author"),new Date(),textMessage.getText());
-                                grp.addMessage(cm);
-                                notifyChatFragment(grp);
-                                return;
+                    if(!textMessage.getStringProperty("author").equals(LOCAL_USER))
+                    {
+                        for(int i = 0; i < this.conversations.size(); i++) {
+                            if (this.conversations.get(i) instanceof GroupConversation) {
+                                GroupConversation grp = (GroupConversation) this.conversations.get(i);
+
+                                mNotificationBuilder = new Notification.Builder(getApplicationContext()).setContentTitle(textMessage.getStringProperty("groupName")).setContentText(textMessage.getStringProperty("author") + ": " + textMessage.getText()).setSmallIcon(R.drawable.ic_notify).setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
+
+                                Log.i("Info", "Groupname is " + textMessage.getStringProperty("groupName"));
+
+                                if(grp.getGroupName().equals(textMessage.getStringProperty("groupName")))
+                                {
+                                    //Group convo found
+                                    Log.i("Info", "Group conversation found in datastore");
+                                    ChatMessage cm = new ChatMessage(textMessage.getStringProperty("author"),new Date(),textMessage.getText());
+                                    grp.addMessage(cm);
+
+                                    if (this.activeConversation == null || !this.activeConversation.equals(grp))
+                                    {
+                                        mNotificationManager.notify(mNotificationId, mNotificationBuilder.build());
+                                        this.mNotificationId = this.mNotificationId + 1;
+                                    }
+
+                                    notifyChatFragment(grp);
+                                    return;
+                                }
                             }
                         }
                     }
-
-                    Log.i("Info", "Adding new group conversastion");
-                    //No convo found
-                    GroupConversation grp = new GroupConversation(new ChatMessage(textMessage.getStringProperty("author"), new Date(), textMessage.getText()),getDestination("/topic/" + textMessage.getStringProperty("groupname")),textMessage.getStringProperty("groupname"));
-                    this.conversations.add(grp);
-                    subscribeTo("/topic/" + textMessage.getStringProperty("groupname"));
-                    notifyChatFragment(null);
                 }
                 else {
                     //its a message for a single recipient
@@ -325,6 +332,24 @@ public class MainActivity extends AppCompatActivity implements MessageListener, 
                 if(srp.getAuthor().equals(author))
                 {
                     return srp;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public GroupConversation getGroupConversationByName(String groupName)
+    {
+        for(int i = 0; i < this.conversations.size(); i++)
+        {
+            if(this.conversations.get(i) instanceof GroupConversation)
+            {
+                GroupConversation grp = (GroupConversation) this.conversations.get(i);
+
+                if(grp.getGroupName().equals(groupName))
+                {
+                    return grp;
                 }
             }
         }

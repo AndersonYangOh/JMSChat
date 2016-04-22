@@ -23,6 +23,7 @@
         <EditText
             android:layout_margin="5dp"
             android:id="@+id/recipientText"
+            android:hint="person to start a chat with... "
             android:layout_alignParentLeft="true"
             android:layout_alignParentStart="true"
             android:layout_width="wrap_content"
@@ -38,5 +39,28 @@
             android:layout_alignParentEnd="true"
             android:src="@drawable/ic_fab_plus"/>
     </RelativeLayout>
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:background="@color/colorPrimary">
+            <EditText
+                android:layout_margin="5dp"
+                android:id="@+id/groupNameText"
+                android:hint="name of group to subscribe to..."
+                android:layout_alignParentLeft="true"
+                android:layout_alignParentStart="true"
+                android:layout_width="wrap_content"
+                android:minWidth="250dp"
+                android:layout_height="wrap_content" />
+
+            <android.support.design.widget.FloatingActionButton
+                android:layout_margin="5dp"
+                android:id="@+id/newGroupChatFab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_alignParentEnd="true"
+                android:src="@drawable/ic_fab_plus"/>
+        </RelativeLayout>
     </LinearLayout>
 </FrameLayout>

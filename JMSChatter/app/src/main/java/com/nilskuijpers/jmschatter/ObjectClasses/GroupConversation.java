@@ -22,6 +22,13 @@ public class GroupConversation extends ChatConversation  {
         this.groupName = groupName;
     }
 
+    public GroupConversation(Destination destinationQueue, String groupName) {
+        super(destinationQueue);
+
+        authors = new ArrayList<>();
+        this.groupName = groupName;
+    }
+
     @Override
     public void addMessage(ChatMessage messageToAdd) {
         super.addMessage(messageToAdd);
@@ -38,9 +45,5 @@ public class GroupConversation extends ChatConversation  {
 
     public String getGroupName() {
         return groupName;
-    }
-
-    public void setGroupName(String groupName) {
-        this.groupName = groupName;
     }
 }

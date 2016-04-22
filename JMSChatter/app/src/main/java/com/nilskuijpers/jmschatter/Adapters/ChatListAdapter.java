@@ -9,8 +9,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.nilskuijpers.jmschatter.ObjectClasses.ChatConversation;
+import com.nilskuijpers.jmschatter.ObjectClasses.GroupConversation;
+import com.nilskuijpers.jmschatter.ObjectClasses.SingleRecipientConversation;
 import com.nilskuijpers.jmschatter.R;
 
+import java.security.acl.Group;
 import java.util.List;
 
 /**
@@ -32,6 +35,18 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ViewHo
 
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
+        if(conversations.get(position) instanceof GroupConversation)
+        {
+            GroupConversation grp = (GroupConversation) conversations.get(position);
+
+            holder.mConversationName.setText(grp.getGroupName());
+        }
+        else
+        {
+            SingleRecipientConversation src = (SingleRecipientConversation)conversations.get(position);
+            holder.mConversationName.setText(src.getAuthor());
+        }
+
         holder.mLatestInteraction.setText(conversations.get(position).toString());
         holder.mConversation = conversations.get(position);
     }
@@ -44,9 +59,11 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ViewHo
     public class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
         public TextView mLatestInteraction;
         public ChatConversation mConversation;
+        public TextView mConversationName;
         public ViewHolder(LinearLayout itemView) {
             super(itemView);
             this.mLatestInteraction = (TextView) itemView.findViewById(R.id.latestInteraction);
+            this.mConversationName = (TextView) itemView.findViewById(R.id.conversationName);
             itemView.setOnClickListener(this);
         }
 
